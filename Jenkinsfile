@@ -51,20 +51,37 @@ pipeline {
             }
         }
     }
-    stage('SonarQube Inspection') {
-        steps {
-            withSonarQubeEnv('SonarQube') { 
-                withCredentials([string(credentialsId: 'SonarQube-Token', variable: 'SONAR_TOKEN')]) {
-                sh """
-                mvn sonar:sonar \
-                -Dsonar.projectKey=JavaWebApp-Project \
-                -Dsonar.host.url=http://172.31.19.82:9000 \
-                -Dsonar.login=$SONAR_TOKEN
-                """
+
+        stage('SonarQube Inspection') {
+            steps {
+                script {
+                    env.JAVA_HOME = "/usr/lib/jvm/java-17-amazon-corretto.x86_64"
+                    env.PATH = "${env.JAVA_HOME}/bin:${env.PATH}"
+                    echo "Using JAVA_HOME = ${env.JAVA_HOME}"
+                    sh 'java -version'
+
+                    withEnv([
+                        'MAVEN_OPTS=--add-opens java.base/java.lang=ALL-UNNAMED ' +
+                                     '--add-opens java.base/java.io=ALL-UNNAMED ' +
+                                     '--add-opens java.base/java.util=ALL-UNNAMED ' +
+                                     '--add-opens java.base/java.lang.reflect=ALL-UNNAMED'
+                    ]) {
+                        withSonarQubeEnv('SonarQube') {
+                            withCredentials([string(credentialsId: 'Sonarqube-Token', variable: 'SONAR_TOKEN')]) {
+                                sh """
+                                mvn sonar:sonar \
+                                -Dsonar.projectKey=Java-WebApp-Project \
+                                -Dsonar.host.url=http://172.31.3.12:9000 \
+                                -Dsonar.login=$SONAR_TOKEN
+                                """
+                            }
+                        }
+                    }
                 }
             }
         }
-    }
+
+
     stage('SonarQube GateKeeper') {
         steps {
           timeout(time : 1, unit : 'HOURS'){
@@ -77,7 +94,7 @@ pipeline {
            nexusArtifactUploader(
               nexusVersion: 'nexus3',
               protocol: 'http',
-              nexusUrl: '172.31.38.223:8081',
+              nexusUrl: '172.31.3.12:8081',
               groupId: 'webapp',
               version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
               repository: 'maven-project-releases',  //"${NEXUS_REPOSITORY}",
@@ -130,7 +147,7 @@ pipeline {
   post {
     always {
         echo 'Slack Notifications.'
-        slackSend channel: '#mk-cicd-pipeline-alerts', //update and provide your channel name
+        slackSend channel: '#af-cicd-pipeline-2', //update and provide your channel name
         color: COLOR_MAP[currentBuild.currentResult],
         message: "*${currentBuild.currentResult}:* Job Name '${env.JOB_NAME}' build ${env.BUILD_NUMBER} \n Build Timestamp: ${env.BUILD_TIMESTAMP} \n Project Workspace: ${env.WORKSPACE} \n More info at: ${env.BUILD_URL}"
     }
